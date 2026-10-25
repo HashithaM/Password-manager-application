@@ -1,0 +1,6 @@
+{
+    "example-service": {
+        "email": "user@example.com",
+        "password": "not-a-real-password"
+    }
+}

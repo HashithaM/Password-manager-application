@@ -1,23 +1,25 @@
-# Educational Password Manager
+# Secure Desktop Password Manager
 
-A Tkinter learning project that generates passwords and stores website login records in a local JSON file. It demonstrates desktop forms, clipboard integration, JSON updates, and record lookup.
+A Tkinter learning project that generates strong passwords and stores login records in the operating system's credential vault instead of plaintext repository files.
 
-> [!CAUTION]
-> This implementation stores passwords in plaintext and uses Python's non-cryptographic `random` module. It is not safe for real credentials. The repository also contains credential-like sample data that should be treated as exposed: rotate any real passwords, remove the data files from public source and history, and never reuse the included values.
+## Security design
 
-## Features
+- Passwords are generated with Python's cryptographically secure `secrets` module.
+- Email and password records are stored through `keyring` using the operating system's credential backend.
+- Retrieved passwords are copied to the clipboard instead of displayed in a dialog.
+- Runtime credential files are ignored by Git.
+- `example-data.json` contains unmistakable dummy values for historical-format reference only; the application does not read it.
 
-- Password generation from letters, numbers, and symbols
-- Clipboard copy with `pyperclip`
-- Local JSON save and update flow
-- Website-based credential lookup
-- Tkinter desktop interface
+> [!IMPORTANT]
+> Any password that appeared in an earlier public revision must still be rotated. Replacing current files does not invalidate a credential or erase Git history.
 
 ## Requirements
 
 ```bash
-pip install pyperclip
+pip install -r requirements.txt
 ```
+
+The application requires a working secure `keyring` backend. It fails visibly if the operating system cannot provide one and never falls back to plaintext storage.
 
 ## Run
 
@@ -25,11 +27,4 @@ pip install pyperclip
 python main.py
 ```
 
-## Security improvements needed
-
-- Generate credentials with Python's `secrets` module.
-- Store secrets in the operating system's credential vault or use authenticated encryption with a separately protected key.
-- Add runtime data files such as `data.json` and `data.txt` to `.gitignore`.
-- Do not display stored passwords in plaintext.
-
-Use this repository only as a GUI/JSON exercise until those controls are implemented.
+Enter a website, username or email, and password. Saving writes the record to the OS credential vault. Searching by the same website copies the password to the clipboard.

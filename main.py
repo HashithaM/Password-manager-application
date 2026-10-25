@@ -1,8 +1,17 @@
+import json
+import secrets
+import string
 from tkinter import *
 from tkinter import messagebox
-from random import choice, randint, shuffle
+
+import keyring
 import pyperclip
-import json
+from keyring.errors import KeyringError
+
+
+SERVICE_NAME = "hashitham-password-manager"
+PASSWORD_LENGTH = 16
+PASSWORD_ALPHABET = string.ascii_letters + string.digits + "!#$%&()*+"
 
 # ---------------------------- PASSWORD GENERATOR ------------------------------- #
 
@@ -10,18 +19,15 @@ import json
 
 
 def generate_password():
-    letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z']
-    numbers = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
-    symbols = ['!', '#', '$', '%', '&', '(', ')', '*', '+']
+    while True:
+        password = "".join(secrets.choice(PASSWORD_ALPHABET) for _ in range(PASSWORD_LENGTH))
+        if (any(char.islower() for char in password)
+                and any(char.isupper() for char in password)
+                and any(char.isdigit() for char in password)
+                and any(char in "!#$%&()*+" for char in password)):
+            break
 
-    password_letters = [choice(letters) for _ in range(randint(8, 10))]
-    password_symbols = [choice(symbols) for _ in range(randint(2, 4))]
-    password_numbers = [choice(numbers) for _ in range(randint(2, 4))]
-
-    password_list = password_letters + password_symbols + password_numbers
-    shuffle(password_list)
-
-    password = "".join(password_list)
+    password_entry.delete(0, END)
     password_entry.insert(0, password)
     pyperclip.copy(password)
 
@@ -29,57 +35,61 @@ def generate_password():
 
 
 def save():
-
-    website = website_entry.get()
-    email = email_entry.get()
+    website = website_entry.get().strip()
+    email = email_entry.get().strip()
     password = password_entry.get()
-    new_data = {
-        website: {
-            "email": email,
-            "password": password
-        }
-    }
 
-    if len(website) == 0 or len(password) == 0:
+    if not website or not email or not password:
         messagebox.showinfo(title="Oops", message="Please make sure you haven't left any fields empty.")
-    else:
-        is_ok = messagebox.askokcancel(title=website, message=f"These are the details entered: \nEmail: {email} "
-                                                      f"\nPassword: {password} \nIs it ok to save?")
-        if is_ok:
-            # Here we always load, edit and write the new data to the json file without editing existing data
-            try:
-                with open("data.json", "r") as data_file:
-                    data = json.load(data_file)
-            except FileNotFoundError:
-                with open("data.json", "w") as data_file:
-                    json.dump(new_data, data_file, indent=4)
-            else:
-                data.update(new_data)
-                with open("data.json", "w") as data_file:
-                    json.dump(data, data_file, indent=4)
-            finally:
-                website_entry.delete(0, END)
-                password_entry.delete(0, END)
+        return
+
+    is_ok = messagebox.askokcancel(
+        title=website,
+        message=f"Save the credential for {email} in the operating system's secure credential vault?",
+    )
+    if not is_ok:
+        return
+
+    credential = json.dumps({"email": email, "password": password})
+    try:
+        keyring.set_password(SERVICE_NAME, website, credential)
+    except KeyringError as error:
+        messagebox.showerror(title="Credential vault error", message=str(error))
+        return
+
+    website_entry.delete(0, END)
+    password_entry.delete(0, END)
 
 # ------------------- Find password ---------------------------------- #
 
 
 def find_password():
-    website = website_entry.get()
+    website = website_entry.get().strip()
+    if not website:
+        messagebox.showinfo(title="Oops", message="Enter a website before searching.")
+        return
+
     try:
-        with open("data.json", "r") as data_file:
-            data = json.load(data_file)
-    except FileNotFoundError:
-        messagebox.showinfo(title="Error", message="No data file found !")
+        stored_credential = keyring.get_password(SERVICE_NAME, website)
+    except KeyringError as error:
+        messagebox.showerror(title="Credential vault error", message=str(error))
+        return
+
+    if stored_credential is None:
+        messagebox.showinfo(title="Error", message=f"No detail for {website} exists!")
         website_entry.delete(0, END)
-    else:
-        if website in data:
-            email = data[website]["email"]
-            password = data[website]["password"]
-            messagebox.showinfo(title=website, message=f"Email : {email} \n Password : {password}")
-        else:
-            messagebox.showinfo(title="Error", message=f"No detail for {website} exists !")
-            website_entry.delete(0, END)
+        return
+
+    try:
+        credential = json.loads(stored_credential)
+        email = credential["email"]
+        password = credential["password"]
+    except (json.JSONDecodeError, KeyError, TypeError):
+        messagebox.showerror(title="Credential vault error", message="The stored record is invalid.")
+        return
+
+    pyperclip.copy(password)
+    messagebox.showinfo(title=website, message=f"Email: {email}\nPassword copied to the clipboard.")
 
 
 # ---------------------------- UI SETUP ------------------------------- #
@@ -107,7 +117,7 @@ website_entry.grid(row=1, column=1)
 website_entry.focus()
 email_entry = Entry(width=35)
 email_entry.grid(row=2, column=1, columnspan=2)
-email_entry.insert(0, "hashithayapa@gmail.com")
+email_entry.insert(0, "user@example.com")
 password_entry = Entry(width=21)
 password_entry.grid(row=3, column=1)
 
